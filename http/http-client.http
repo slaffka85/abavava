@@ -1,0 +1,277 @@
+@base_url = http://localhost:8082
+@access_token =
+@refresh_token =
+
+### ============================================
+### chat-abavava-java — HTTP Client
+###
+### IntelliJ IDEA HTTP Client для вызова API.
+###
+### Переключение окружения:
+###   1. Нажми Ctrl+Shift+P (или Cmd+Shift+P на Mac)
+###   2. Выбери окружение: dev, local, prod
+###   3. Все запросы автоматически подхватят новый URL
+###
+### Демо-данные (ABV_SEED=true):
+###   anya@example.com / password123
+###   pavel@example.com / password123
+###   test / test
+### ============================================
+
+### --- Аутентификация ---
+
+### 1. Регистрация нового пользователя
+### POST /api/v1/auth/register
+### 201 Created
+POST {{base_url}}/api/v1/auth/register
+Content-Type: application/json
+
+{
+  "email": "tssv85@gmail.com",
+  "display_name": "slaffka85",
+  "password": "1"
+}
+
+> {%
+  client.assert(response.status === 201, "Expected 201, got " + response.status);
+  client.global.set("access_token", response.body.access_token);
+  client.global.set("refresh_token", response.body.refresh_token);
+  client.log("Registered. Token: " + response.body.access_token.substring(0, 30) + "...");
+%}
+
+### 2. Логин
+### POST /api/v1/auth/login
+### 200 OK
+POST {{base_url}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "tssv85@gmail.com",
+  "password": "1"
+}
+
+> {%
+  client.global.set("access_token", response.body.access_token);
+  client.global.set("refresh_token", response.body.refresh_token);
+  client.log("Logged in. Token: " + response.body.access_token.substring(0, 30) + "...");
+%}
+
+### 3. Обновление refresh-токена
+### POST /api/v1/auth/refresh
+### 200 OK
+POST {{base_url}}/api/v1/auth/refresh
+Content-Type: application/json
+
+{
+  "refresh_token": "{{refresh_token}}"
+}
+
+> {%
+  client.global.set("access_token", response.body.access_token);
+  client.global.set("refresh_token", response.body.refresh_token);
+  client.log("Token refreshed.");
+%}
+
+### 4. Выход (logout)
+### POST /api/v1/auth/logout
+### 204 No Content
+POST {{base_url}}/api/v1/auth/logout
+Content-Type: application/json
+
+{
+  "refresh_token": "{{refresh_token}}"
+}
+
+> {%
+  client.assert(response.status === 204, "Expected 204, got " + response.status);
+  client.log("Logged out.");
+%}
+
+### --- Пользователи ---
+
+### 5. Профиль текущего пользователя
+### GET /api/v1/me
+### 200 OK
+GET {{base_url}}/api/v1/me
+Authorization: Bearer {{access_token}}
+
+### 6. Обновить профиль
+### PATCH /api/v1/me
+### 200 OK
+PATCH {{base_url}}/api/v1/me
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "display_name": "New Name"
+}
+
+### 7. Список пользователей
+### GET /api/v1/users
+### 200 OK
+GET {{base_url}}/api/v1/users
+Authorization: Bearer {{access_token}}
+
+### 8. Пользователь по ID
+### GET /api/v1/users/{id}
+### 200 OK
+GET {{base_url}}/api/v1/users/00000000-0000-0000-0000-000000000000
+Authorization: Bearer {{access_token}}
+
+### --- Чаты ---
+
+### 9. Список диалогов (keyset-пагинация)
+### GET /api/v1/conversations
+### 200 OK
+GET {{base_url}}/api/v1/conversations?limit=10
+Authorization: Bearer {{access_token}}
+
+### 10. Создать прямой диалог
+### POST /api/v1/conversations
+### 200/201 Created
+POST {{base_url}}/api/v1/conversations
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "kind": "direct",
+  "member_ids": ["00000000-0000-0000-0000-000000000000"]
+}
+
+### 11. Создать группу
+### POST /api/v1/conversations
+### 201 Created
+POST {{base_url}}/api/v1/conversations
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "kind": "group",
+  "title": "Test Group",
+  "member_ids": ["00000000-0000-0000-0000-000000000000"]
+}
+
+### 12. Информация о диалоге
+### GET /api/v1/conversations/{id}
+### 200 OK
+GET {{base_url}}/api/v1/conversations/00000000-0000-0000-0000-000000000000
+Authorization: Bearer {{access_token}}
+
+### 13. Отправить сообщение (идемпотентно через client_id)
+### POST /api/v1/conversations/{id}/messages
+### 201 Created
+POST {{base_url}}/api/v1/conversations/00000000-0000-0000-0000-000000000000/messages
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "client_id": "{{[uuid]}}",
+  "body": "Hello from IntelliJ HTTP Client!"
+}
+
+### 14. История сообщений
+### GET /api/v1/conversations/{id}/messages
+### 200 OK
+GET {{base_url}}/api/v1/conversations/00000000-0000-0000-0000-000000000000/messages?limit=20
+Authorization: Bearer {{access_token}}
+
+### 15. Отметить прочитанным
+### POST /api/v1/conversations/{id}/read
+### 204 No Content
+POST {{base_url}}/api/v1/conversations/00000000-0000-0000-0000-000000000000/read
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "cursor": 100
+}
+
+### 16. Отправить событие "печатает"
+### POST /api/v1/conversations/{id}/typing
+### 204 No Content
+POST {{base_url}}/api/v1/conversations/00000000-0000-0000-0000-000000000000/typing
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "typing": true
+}
+
+### --- Звонки ---
+
+### 17. Создать звонок
+### POST /api/v1/calls
+### 201 Created
+POST {{base_url}}/api/v1/calls
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "peer_id": "00000000-0000-0000-0000-000000000000",
+  "kind": "audio"
+}
+
+### 18. Список звонков
+### GET /api/v1/calls
+### 200 OK
+GET {{base_url}}/api/v1/calls?limit=20
+Authorization: Bearer {{access_token}}
+
+### 19. Принять звонок
+### POST /api/v1/calls/{id}/accept
+### 200 OK
+POST {{base_url}}/api/v1/calls/00000000-0000-0000-0000-000000000000/accept
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{}
+
+### 20. Завершить звонок
+### POST /api/v1/calls/{id}/end
+### 200 OK
+POST {{base_url}}/api/v1/calls/00000000-0000-0000-0000-000000000000/end
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{}
+
+### --- Конфигурация и статус ---
+
+### 21. ICE-конфигурация (STUN/TURN)
+### GET /api/v1/config/ice
+### 200 OK
+GET {{base_url}}/api/v1/config/ice
+
+### 22. Health check
+### GET /healthz
+### 200 OK
+GET {{base_url}}/healthz
+
+### 23. Ready check (пингует БД)
+### GET /readyz
+### 200 OK
+GET {{base_url}}/readyz
+
+### 24. Статус API (online users)
+### GET /api/v1/status
+### 200 OK
+GET {{base_url}}/api/v1/status
+
+### --- Участники диалога ---
+
+### 25. Добавить участника
+### POST /api/v1/conversations/{id}/members
+### 204 No Content
+POST {{base_url}}/api/v1/conversations/00000000-0000-0000-0000-000000000000/members
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "user_ids": ["00000000-0000-0000-0000-000000000000"]
+}
+
+### 26. Удалить участника
+### DELETE /api/v1/conversations/{id}/members/{user_id}
+### 204 No Content
+DELETE {{base_url}}/api/v1/conversations/00000000-0000-0000-0000-000000000000/members/00000000-0000-0000-0000-000000000000
+Authorization: Bearer {{access_token}}

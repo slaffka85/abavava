@@ -1,0 +1,114 @@
+# =============================================================================
+# Конфигурация chat-abavava-java.
+#
+# Это единственный источник значений по умолчанию: в Java-коде параметров не
+# зашито. Стандартные вещи Spring Boot (сервер, пул соединений, логирование)
+# настраиваются его штатными свойствами (spring.*, logging.*) и собираются
+# автоконфигурацией; прикладные параметры — в секции `abv`.
+#
+# Любое значение можно переопределить переменной окружения: прикладные — с
+# префиксом ABV_ (relaxed binding), стандартные — SPRING_*, например:
+#   abv.http-addr           ← ABV_HTTP_ADDR
+#   spring.datasource.url   ← SPRING_DATASOURCE_URL
+# Переменные окружения имеют приоритет над этим файлом.
+# =============================================================================
+spring:
+  application:
+    name: chat-abavava-java
+  main:
+    banner-mode: off
+  autoconfigure:
+    exclude:
+      # Spring Data JDBC repositories не используются: все репозитории — на
+      # JdbcClient. Без исключения автоконфиг создаёт JdbcDialect (с проверкой
+      # соединения) ещё до старта приложения, и сервис не переживёт старт
+      # postgres рядом (abv.migration.* не успеет подождать БД).
+      - org.springframework.boot.data.jdbc.autoconfigure.DataJdbcRepositoriesAutoConfiguration
+  sql:
+    init:
+      # Миграции применяются MigrationRunner'ом (advisory lock), а не spring.sql.init
+      mode: never
+  datasource:
+    # URL PostgreSQL в JDBC-формате (формат postgres:// понимает только Go-трек).
+    url: ${ABV_DATABASE_URL:jdbc:postgresql://localhost:5432/abavava?sslmode=disable}
+    username: ${ABV_DATABASE_USERNAME:abavava}
+    password: ${ABV_DATABASE_PASSWORD:abavava}
+    hikari:
+      # Параметры пула повторяют database.DefaultOptions() из Go-реализации.
+      pool-name: abv-pool
+      maximum-pool-size: 10
+      minimum-idle: 1
+      max-lifetime: 3600000
+      idle-timeout: 1800000
+      connection-timeout: 10000
+      validation-timeout: 5000
+      # Ленивая инициализация (как WaitReady в Go): сервис должен пережить
+      # старт postgres рядом, а MigrationRunner сам ждёт доступности БД.
+      initialization-fail-timeout: -1
+
+logging:
+  level:
+    # Корневой уровень — из abv.log-level (ABV_LOG_LEVEL), по умолчанию INFO.
+    root: ${abv.log-level:INFO}
+    org.springframework.web.socket: WARN
+
+abv:
+  # Окружение: production включает дополнительные проверки (JWT-секрет,
+  # ALLOWED_ORIGINS) и запрещает демо-сид.
+  env: development
+  # Адрес прослушивания. По умолчанию :8082, чтобы не конфликтовать с Go-треком
+  # (:8080). Поддерживается ":8082", "0.0.0.0:8082" и "8082".
+  http-addr: ":8082"
+
+  # JWT (HS256): секрет подписи и время жизни токенов.
+  # Обязателен даже в development: задайте случайное значение через ABV_JWT_SECRET.
+  jwt-secret: ${ABV_JWT_SECRET:}
+  access-ttl: 15m
+  refresh-ttl: 720h
+
+  # Таймаут дозвона: неотвеченный звонок переходит в missed (в т.ч. при
+  # рестарте сервиса для «зависших» ringing-звонков).
+  call-ring-timeout: 45s
+
+  # CORS и проверка Origin для WebSocket-рукопожатия.
+  allowed-origins: "http://localhost:5173,http://127.0.0.1:5173"
+
+  log-level: info
+  # Применять SQL-миграции при старте.
+  migrate-on-start: true
+  # Демо-данные для локальной разработки (эквивалент ABV_SEED=true / --seed).
+  seed: false
+  # Предел длины текста сообщения (code points).
+  max-message-length: 4000
+
+  # ICE: STUN отдаётся клиенту всегда, TURN — только если задан turn-url.
+  stun-urls: "stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302"
+  turn-url: ""
+  turn-username: ""
+  turn-credential: ""
+
+  migration:
+    # Ожидание доступности PostgreSQL при старте.
+    wait-attempts: 30
+    wait-interval: 1s
+
+  auth-rate-limit:
+    # Скользящее окно в памяти для /api/v1/auth/*: N запросов за окно.
+    limit: 30
+    window: 60s
+
+  cors:
+    # Access-Control-Max-Age для preflight-запросов.
+    max-age: 600
+
+  ws:
+    # Транспортные пределы WebSocket (совместимы с maxFrameSize/sendBuffer
+    # Go-реализации).
+    max-frame-size: 65536
+    max-send-buffer: 256
+    heartbeat-interval: 60s
+    idle-timeout: 70s
+
+  chat:
+    max-group-members: 64
+    max-title-length: 128

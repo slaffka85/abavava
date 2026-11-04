@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.1.2</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.abavava</groupId>
+    <artifactId>chat-abavava-java</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <name>chat-abavava-java</name>
+    <description>
+        chat-abavava - чат и видеозвонки доступны по всему миру
+    </description>
+
+    <properties>
+        <java.version>26</java.version>
+        <maven.compiler.release>26</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!--
+            Пин Spring WebSocket / Security Crypto: в локальном кэше Maven лежат
+            только эти версии (офлайн-сборка на машине разработчика).
+            spring-websocket 7.0.6 совместим по API со spring-framework 7.0.8.
+        -->
+        <spring-websocket.version>7.0.6</spring-websocket.version>
+        <spring-security-crypto.version>7.0.4</spring-security-crypto.version>
+    </properties>
+
+    <dependencies>
+        <!-- HTTP API: Tomcat, Spring MVC, Jackson 3 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- Spring Data JDBC + JdbcClient (spring-jdbc): пер.-в-очередь SQL-подход -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jdbc</artifactId>
+        </dependency>
+
+        <!-- WebSocket-транспорт (raw WebSocketHandler) -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-websocket</artifactId>
+<!--            <version>${spring-websocket.version}</version>-->
+        </dependency>
+
+        <!-- Только bcrypt: пароли хешируются cost 12, как в Go-реализации -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-crypto</artifactId>
+<!--            <version>${spring-security-crypto.version}</version>-->
+        </dependency>
+
+        <!-- PostgreSQL JDBC -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </path>
+                    </annotationProcessorPaths>
+                    <!-- names used by Spring JDBC named-parameter binding -->
+                    <parameters>true</parameters>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

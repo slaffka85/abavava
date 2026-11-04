@@ -1,0 +1,14 @@
+# Maven / IDE
+target/
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# Локальное окружение
+.env
+
+# Временные артефакты проверок
+.tmp-check/
+*.log
