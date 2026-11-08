@@ -15,6 +15,49 @@
     <title>abavava</title>
   </head>
   <body>
+  <div id="mobile-debug-console" style="position:fixed; bottom:0; left:0; width:100%; max-height:200px; overflow-y:auto; background:rgba(0,0,0,0.9); color:#ff5555; font-family:monospace; font-size:12px; z-index:999999; padding:10px; box-sizing:border-box; pointer-events:none;">
+    <strong>Логи и Ошибки:</strong><br>
+  </div>
+
+  <script>
+    (function() {
+      const consoleDiv = document.getElementById('mobile-debug-console');
+
+      function logToScreen(message, isError = false) {
+        const line = document.createElement('div');
+        line.style.color = isError ? '#ff5555' : '#55ff55';
+        line.innerText = `[${new Date().toLocaleTimeString()}] ${message}`;
+        consoleDiv.appendChild(line);
+        consoleDiv.scrollTop = consoleDiv.scrollHeight; // Прокрутка вниз
+      }
+
+      // Перехват обычных ошибок JS
+      window.onerror = function(msg, url, line) {
+        logToScreen(`Ошибка: ${msg} (Строка: ${line})`, true);
+        return false;
+      };
+
+      // Перехват неотловленных промисов (часто бывает в WebRTC)
+      window.onunhandledrejection = function(event) {
+        logToScreen(`Ошибка промиса: ${event.reason}`, true);
+      };
+
+      // Перехватываем стандартный console.log и console.error для вывода на экран
+      const oldLog = console.log;
+      console.log = function(...args) {
+        oldLog.apply(console, args);
+        logToScreen(args.join(' '), false);
+      };
+
+      const oldError = console.error;
+      console.error = function(...args) {
+        oldError.apply(console, args);
+        logToScreen(args.join(' '), true);
+      };
+
+      logToScreen('Самодельная консоль запущена успешно!');
+    })();
+  </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
