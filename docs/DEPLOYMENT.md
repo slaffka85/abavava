@@ -120,8 +120,6 @@ repository secret** и добавьте:
 | `VPS_USER` | deploy-пользователь |
 | `VPS_SSH_PRIVATE_KEY` | приватный SSH-ключ deploy-пользователя |
 | `VPS_KNOWN_HOSTS` | проверенная строка SSH host key сервера |
-| `GHCR_READ_USER` | GitHub username с доступом к пакетам |
-| `GHCR_READ_TOKEN` | classic PAT только с `read:packages` |
 
 Установите публичную часть ключа в
 `/home/<deploy-user>/.ssh/authorized_keys`. Host key сохраните в
@@ -131,8 +129,10 @@ deploy to VPS → Run workflow**. Он запускает backend-тесты, с
 образа (`abavava-api` и `abavava-web`), отправляет их в GHCR и обновляет Compose
 на VPS. Оба контейнера получают тег commit SHA.
 
-PAT используется VPS для скачивания приватных образов; GitHub Actions публикует
-их с `GITHUB_TOKEN`. Настройте срок действия и ротацию PAT.
+Для публикации и скачивания приватных образов workflow использует свой
+краткоживущий `GITHUB_TOKEN` с разрешением `packages: write`. Он передаётся VPS
+через SSH только на время run и хранится во временном Docker config, удаляемом в
+завершающем шаге. Отдельный PAT для GHCR не нужен.
 
 Проверьте `https://abavava.tssv85.com/` и
 `https://abavava.tssv85.com/api/v1/readyz`. Статус контейнеров и логи:

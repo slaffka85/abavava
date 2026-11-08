@@ -89,16 +89,17 @@ jobs:
             | ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes "$VPS_USER@$VPS_HOST" \
               'umask 077; cat > /opt/abavava/.deploy.env'
 
-      - name: Log in to GHCR on VPS
+      - name: Log in to GHCR on VPS with job token
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
-          GHCR_READ_USER: ${{ secrets.GHCR_READ_USER }}
-          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEPLOY_ID: ${{ github.run_id }}-${{ github.run_attempt }}
         run: |
-          printf '%s\n%s' "$GHCR_READ_USER" "$GHCR_READ_TOKEN" \
+          printf '%s\n%s' "$GHCR_USERNAME" "$GHCR_TOKEN" \
             | ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes "$VPS_USER@$VPS_HOST" \
-              'IFS= read -r login_user; docker login ghcr.io --username "$login_user" --password-stdin'
+              "umask 077; export DOCKER_CONFIG=/tmp/abavava-ghcr-$DEPLOY_ID; mkdir -p \"\$DOCKER_CONFIG\"; IFS= read -r login_user; docker login ghcr.io --username \"\$login_user\" --password-stdin"
 
       - name: Validate production Compose configuration
         env:
@@ -112,9 +113,10 @@ jobs:
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
+          DEPLOY_ID: ${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes "$VPS_USER@$VPS_HOST" \
-            'cd /opt/abavava && docker compose --env-file .env.production --env-file .deploy.env -f compose.prod.yaml pull'
+            "cd /opt/abavava && DOCKER_CONFIG=/tmp/abavava-ghcr-$DEPLOY_ID docker compose --env-file .env.production --env-file .deploy.env -f compose.prod.yaml pull"
 
       - name: Start production stack
         env:
@@ -130,6 +132,7 @@ jobs:
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
+          DEPLOY_ID: ${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes "$VPS_USER@$VPS_HOST" \
-            'docker logout ghcr.io'
+            "DOCKER_CONFIG=/tmp/abavava-ghcr-$DEPLOY_ID docker logout ghcr.io; rm -f /tmp/abavava-ghcr-$DEPLOY_ID/config.json; rmdir /tmp/abavava-ghcr-$DEPLOY_ID 2>/dev/null || true"
