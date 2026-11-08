@@ -1,0 +1,9 @@
+node_modules
+dist
+.env
+.env.*
+.vite
+.npm-cache
+.pw-browsers
+tools/media-check-artifacts
+*.tsbuildinfo

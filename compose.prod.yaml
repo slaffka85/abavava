@@ -1,0 +1,55 @@
+name: abavava
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: abavava
+      POSTGRES_USER: abavava
+      POSTGRES_PASSWORD: ${ABV_DATABASE_PASSWORD:?Set ABV_DATABASE_PASSWORD in .env.production}
+      POSTGRES_INITDB_ARGS: --data-checksums
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U abavava -d abavava"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  api:
+    image: ${ABV_API_IMAGE:?Set ABV_API_IMAGE in .deploy.env}
+    environment:
+      ABV_ENV: production
+      ABV_HTTP_ADDR: 0.0.0.0:8082
+      ABV_DATABASE_URL: jdbc:postgresql://postgres:5432/abavava?sslmode=disable
+      ABV_DATABASE_USERNAME: abavava
+      ABV_DATABASE_PASSWORD: ${ABV_DATABASE_PASSWORD:?Set ABV_DATABASE_PASSWORD in .env.production}
+      ABV_JWT_SECRET: ${ABV_JWT_SECRET:?Set ABV_JWT_SECRET in .env.production}
+      ABV_ALLOWED_ORIGINS: https://${ABV_DOMAIN:?Set ABV_DOMAIN in .env.production}
+      ABV_MIGRATE_ON_START: "true"
+      ABV_SEED: "false"
+      ABV_LOG_LEVEL: ${ABV_LOG_LEVEL:-info}
+      ABV_TURN_URL: ${ABV_TURN_URL:-}
+      ABV_TURN_USERNAME: ${ABV_TURN_USERNAME:-}
+      ABV_TURN_CREDENTIAL: ${ABV_TURN_CREDENTIAL:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "8082"
+    ports:
+      - "127.0.0.1:18082:8082"
+    restart: unless-stopped
+
+  web:
+    image: ${ABV_WEB_IMAGE:?Set ABV_WEB_IMAGE in .deploy.env}
+    ports:
+      - "127.0.0.1:18080:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  pgdata:
