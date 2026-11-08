@@ -42,6 +42,11 @@ jar ещё не собран — стартует с classpath из локаль
 
 ## Клиенты
 
+### Production-деплой
+
+Docker Compose для VPS, GitHub Actions и пошаговая настройка описаны в
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
 ### Web
 
 ```powershell

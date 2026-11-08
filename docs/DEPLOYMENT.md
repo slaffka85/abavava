@@ -1,59 +1,169 @@
-# Deployment (Java backend)
+# Продакшен-деплой Abavava на VPS
 
-Production layout for one VPS with Nginx already installed:
+Все части приложения работают в Docker Compose: `web` (React и Nginx со
+статическими файлами), `api` (Java) и `postgres`. PostgreSQL доступен только
+внутри Docker-сети. Frontend опубликован на `127.0.0.1:18080`, API — на
+`127.0.0.1:18082`; существующий Nginx на хосте завершает TLS и проксирует
+запросы в эти два контейнера.
 
-- Nginx serves `web/dist` and terminates HTTPS using the certificate already configured on the host.
-- Nginx proxies `/api/`, including WebSocket `/api/v1/ws`, to Java on `127.0.0.1:8082`.
-- PostgreSQL runs from Compose and is published only on `127.0.0.1:5433`.
-- Android connects to the public HTTPS origin (for example `https://chat.example.com`).
+## Nginx на хосте
 
-## Backend runtime
-
-The backend is compiled for **Java 26** (`pom.xml` sets `maven.compiler.release=26`). Install a Java 26 runtime on the VPS, or build the JAR on a machine with JDK 26 and install Java 26 JRE on the VPS.
-
-Create a server-only environment file with at least:
-
-```dotenv
-ABV_ENV=production
-ABV_HTTP_ADDR=127.0.0.1:8082
-ABV_DATABASE_URL=jdbc:postgresql://127.0.0.1:5433/abavava?sslmode=disable
-ABV_DATABASE_USERNAME=abavava
-ABV_DATABASE_PASSWORD=REPLACE_WITH_RANDOM_PASSWORD
-ABV_JWT_SECRET=REPLACE_WITH_RANDOM_SECRET_AT_LEAST_32_CHARACTERS
-ABV_ALLOWED_ORIGINS=https://chat.example.com
-ABV_FCM_SERVICE_ACCOUNT_FILE=/etc/abavava/firebase-service-account.json
-```
-
-Keep this file and Firebase service-account JSON outside Git and restrict their permissions. Use the same database password for the PostgreSQL container. The Compose file binds the database port to loopback only.
-
-Build and upload `target/abavava-0.1.0-SNAPSHOT.jar`, start PostgreSQL with `docker compose up -d postgres`, then run the JAR under a dedicated `systemd` service account. Set its working directory to the deployment directory so Spring can load its server-side `.env` if that configuration style is used. Configure `systemd` to restart the service after failure and on reboot.
-
-## Nginx
-
-Add these directives inside the existing HTTPS `server` block. Keep your existing certificate and domain configuration. The application needs the original Host header, forwarded HTTPS scheme, and WebSocket upgrade support.
+Замените `root`/`try_files` в HTTPS-блоке на proxy locations ниже. Сохраните
+существующие `listen`, сертификаты и параметры TLS. Пример целиком для указанного
+домена:
 
 ```nginx
-location /api/ {
-    proxy_pass http://127.0.0.1:8082;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_read_timeout 3600s;
+server {
+    listen 127.0.0.1:8443 ssl http2;
+    server_name abavava.tssv85.com;
+
+    ssl_certificate /etc/nginx/ssl/abavava.tssv85.com/fullchain.pem;
+    ssl_certificate_key /etc/nginx/ssl/abavava.tssv85.com/privkey.pem;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    # REST API и WebSocket идут в Java-контейнер.
+    location /api/ {
+        proxy_pass http://127.0.0.1:18082;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 3600s;
+    }
+
+    # Остальные запросы и SPA-маршруты идут в web-контейнер.
+    location / {
+        proxy_pass http://127.0.0.1:18080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+server {
+    listen 80;
+    server_name abavava.tssv85.com;
+
+    # Оставьте этот location, если Certbot использует webroot /var/www/html.
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
 }
 ```
 
-Serve the web build from `web/dist` with SPA fallback (`try_files $uri $uri/ /index.html`). Since browser and API share an origin, leave `VITE_API_BASE` empty in the web build. Rebuild the Android APK with the public HTTPS origin selected in the app.
+`proxy_pass` без завершающего `/` сохраняет исходный путь `/api/...`. Это важно
+для маршрутов API и WebSocket `/api/v1/ws`. Убедитесь, что внешний TLS-proxy,
+если он у вас есть, направляет HTTPS на `127.0.0.1:8443`: этот listener привязан
+только к loopback. Если этот Nginx сам принимает публичный HTTPS напрямую,
+используйте его фактический `listen` на публичном интерфейсе/порту вместо
+`127.0.0.1:8443`.
 
-## Calls and notifications
+После запуска контейнеров проверьте и перечитайте конфигурацию:
 
-HTTPS is required for browser/WebView camera and microphone access. WebRTC media is peer-to-peer when possible; configure a TURN server (`ABV_TURN_URL`, `ABV_TURN_USERNAME`, `ABV_TURN_CREDENTIAL`) for clients behind restrictive NATs. Open the TURN server's configured UDP/TCP ports separately from Nginx.
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
 
-FCM notifications require the server-side Firebase service account file. The Android `google-services.json` is client configuration and belongs to the Android app; the service-account JSON is a private server credential and must never be committed.
+## Подготовьте VPS
 
-## Backups and exposure
+1. Установите Docker Engine и Compose plugin. Проверьте `docker compose version`.
+2. Создайте deploy-пользователя с доступом к Docker и правом записи в
+   `/opt/abavava`. Членство в группе `docker` фактически даёт права root;
+   ограничьте SSH-ключ и workflow, которым разрешён деплой.
+3. Подготовьте каталог от администратора, заменив `deploy` на имя пользователя:
 
-Expose only SSH, HTTP/HTTPS, and the explicitly configured TURN ports. Do not expose PostgreSQL or Java's `8082` directly. Back up the PostgreSQL volume regularly and store encrypted copies off the VPS. Verify restoration before relying on the backups.
+   ```bash
+   install -d -o deploy -g deploy -m 0755 /opt/abavava
+   ```
+
+4. С локального клона скопируйте пример и заполните его на VPS:
+
+   ```bash
+   scp .env.production.example deploy@<VPS_HOST>:/opt/abavava/.env.production
+   ssh deploy@<VPS_HOST>
+   chmod 600 /opt/abavava/.env.production
+   nano /opt/abavava/.env.production
+   ```
+
+   Укажите `ABV_DOMAIN=abavava.tssv85.com`. Сгенерируйте уникальные секреты:
+
+   ```bash
+   openssl rand -hex 32
+   openssl rand -base64 48
+   ```
+
+   Первое значение задайте как `ABV_DATABASE_PASSWORD`, второе как
+   `ABV_JWT_SECRET`. Храните заполненный файл только на сервере. Пароль БД
+   должен оставаться неизменным после создания volume, если вы отдельно не
+   меняете пароль в PostgreSQL.
+
+## GitHub Actions и деплой
+
+В репозитории откройте **Settings → Secrets and variables → Actions → New
+repository secret** и добавьте:
+
+| Secret | Значение |
+| --- | --- |
+| `VPS_HOST` | IP-адрес или SSH hostname сервера |
+| `VPS_USER` | deploy-пользователь |
+| `VPS_SSH_PRIVATE_KEY` | приватный SSH-ключ deploy-пользователя |
+| `VPS_KNOWN_HOSTS` | проверенная строка SSH host key сервера |
+| `GHCR_READ_USER` | GitHub username с доступом к пакетам |
+| `GHCR_READ_TOKEN` | classic PAT только с `read:packages` |
+
+Установите публичную часть ключа в
+`/home/<deploy-user>/.ssh/authorized_keys`. Host key сохраните в
+`VPS_KNOWN_HOSTS` после проверки через доверенный административный канал.
+Workflow запускается при push в `main` или вручную через **Actions → Build and
+deploy to VPS → Run workflow**. Он запускает backend-тесты, собирает два Docker-
+образа (`abavava-api` и `abavava-web`), отправляет их в GHCR и обновляет Compose
+на VPS. Оба контейнера получают тег commit SHA.
+
+PAT используется VPS для скачивания приватных образов; GitHub Actions публикует
+их с `GITHUB_TOKEN`. Настройте срок действия и ротацию PAT.
+
+Проверьте `https://abavava.tssv85.com/` и
+`https://abavava.tssv85.com/api/v1/readyz`. Статус контейнеров и логи:
+
+```bash
+cd /opt/abavava
+docker compose --env-file .env.production --env-file .deploy.env \
+  -f compose.prod.yaml ps
+docker compose --env-file .env.production --env-file .deploy.env \
+  -f compose.prod.yaml logs -f web api postgres
+```
+
+## Откат, данные и дополнительные настройки
+
+В `/opt/abavava/.deploy.env` указаны полные теги обоих образов. Для отката
+замените их тегами предыдущего commit SHA и выполните:
+
+```bash
+docker compose --env-file .env.production --env-file .deploy.env \
+  -f compose.prod.yaml pull
+docker compose --env-file .env.production --env-file .deploy.env \
+  -f compose.prod.yaml up -d
+```
+
+Перед откатом проверьте совместимость старого backend с миграциями, уже
+применёнными к БД. Регулярно резервируйте volume PostgreSQL `pgdata`, храните
+зашифрованные копии вне VPS и проверяйте восстановление.
+
+Android push включается отдельно: смонтируйте серверный Firebase service-account
+JSON и задайте `ABV_FCM_SERVICE_ACCOUNT_FILE` для API-сервиса в Compose. Не
+путайте его с Android `google-services.json`. Для звонков за строгим NAT задайте
+`ABV_TURN_URL`, `ABV_TURN_USERNAME` и `ABV_TURN_CREDENTIAL` в
+`.env.production`, затем пересоздайте API-контейнер. PostgreSQL не публикуется;
+порты `18080` и `18082` доступны только с loopback.

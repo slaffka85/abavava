@@ -8,6 +8,9 @@ target/
 
 # Локальное окружение
 .env
+.env.production
+.deploy.env
+android/app/google-services.json
 
 # Временные артефакты проверок
 .tmp-check/
