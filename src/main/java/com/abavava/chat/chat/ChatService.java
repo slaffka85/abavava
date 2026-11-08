@@ -12,6 +12,8 @@ import com.abavava.chat.domain.Events;
 import com.abavava.chat.domain.MemberRole;
 import com.abavava.chat.domain.Message;
 import com.abavava.chat.domain.MessageKind;
+import com.abavava.chat.push.FcmPushSender;
+import com.abavava.chat.push.PushDeviceRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -41,6 +43,8 @@ public class ChatService implements ChatCommands {
     private static final Logger log = LoggerFactory.getLogger(ChatService.class);
 
     private final ChatRepository repo;
+    private final PushDeviceRepository pushDevices;
+    private final FcmPushSender pushSender;
     private final ObjectProvider<Broadcaster> broadcasters;
     /** Предел длины текста сообщения: abv.max-message-length. */
     private final int maxBodyLength;
@@ -49,9 +53,12 @@ public class ChatService implements ChatCommands {
     /** Длина заголовка группы (code points): abv.chat.max-title-length. */
     private final int maxTitleLength;
 
-    public ChatService(ChatRepository repo, ObjectProvider<Broadcaster> broadcasters, AbvProperties props) {
+    public ChatService(ChatRepository repo, ObjectProvider<Broadcaster> broadcasters,
+                       PushDeviceRepository pushDevices, FcmPushSender pushSender, AbvProperties props) {
         this.repo = repo;
         this.broadcasters = broadcasters;
+        this.pushDevices = pushDevices;
+        this.pushSender = pushSender;
         this.maxBodyLength = props.maxMessageLength();
         this.maxGroupMembers = props.chat().maxGroupMembers();
         this.maxTitleLength = props.chat().maxTitleLength();
@@ -245,6 +252,19 @@ public class ChatService implements ChatCommands {
         }
         broadcaster().sendToUsers(members, Events.newEvent(Events.MESSAGE_NEW,
                 new Events.MessageNewPayload(message)));
+        if (pushSender.enabled()) {
+            for (UUID member : members) {
+                if (member.equals(message.senderId())) continue;
+                for (String token : pushDevices.tokens(member)) {
+                    try {
+                        pushSender.sendNewMessage(token);
+                    } catch (RuntimeException e) {
+                        log.warn("message push failed: conversation_id={} recipient_id={}",
+                                message.conversationId(), member, e);
+                    }
+                }
+            }
+        }
     }
 
     private Broadcaster broadcaster() {

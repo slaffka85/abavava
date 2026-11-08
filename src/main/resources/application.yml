@@ -13,6 +13,10 @@
 # Переменные окружения имеют приоритет над этим файлом.
 # =============================================================================
 spring:
+  # Локальные секреты и настройки не попадают в Git; переменные окружения
+  # по-прежнему имеют более высокий приоритет.
+  config:
+    import: "optional:file:./.env[.properties]"
   application:
     name: chat-abavava-java
   main:
@@ -69,6 +73,9 @@ abv:
   # Таймаут дозвона: неотвеченный звонок переходит в missed (в т.ч. при
   # рестарте сервиса для «зависших» ringing-звонков).
   call-ring-timeout: 45s
+  # Optional Google service account JSON used to send Android call pushes.
+  fcm:
+    service-account-file: ${ABV_FCM_SERVICE_ACCOUNT_FILE:}
 
   # CORS и проверка Origin для WebSocket-рукопожатия.
   allowed-origins: "http://localhost:5173,http://127.0.0.1:5173"

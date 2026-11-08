@@ -39,7 +39,8 @@ public record AbvProperties(
         RateLimit authRateLimit,
         Cors cors,
         Ws ws,
-        Chat chat
+        Chat chat,
+        String fcmServiceAccountFile
 ) {
 
     /** Ожидание доступности БД при старте. */

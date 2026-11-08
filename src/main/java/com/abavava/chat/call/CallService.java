@@ -12,6 +12,8 @@ import com.abavava.chat.domain.CallKind;
 import com.abavava.chat.domain.CallStatus;
 import com.abavava.chat.domain.Events;
 import com.abavava.chat.domain.User;
+import com.abavava.chat.push.FcmPushSender;
+import com.abavava.chat.push.PushDeviceRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -58,6 +60,8 @@ public class CallService implements CallCommands {
     private final UserLookup users;
     private final ChatCommands chat;
     private final ObjectProvider<Broadcaster> broadcasterProvider;
+    private final PushDeviceRepository pushDevices;
+    private final FcmPushSender pushSender;
     /** Таймаут дозвона (abv.call-ring-timeout). */
     private final Duration ringTimeout;
 
@@ -70,11 +74,15 @@ public class CallService implements CallCommands {
                        UserLookup users,
                        ChatCommands chat,
                        ObjectProvider<Broadcaster> broadcasterProvider,
+                       PushDeviceRepository pushDevices,
+                       FcmPushSender pushSender,
                        AbvProperties properties) {
         this.repo = repo;
         this.users = users;
         this.chat = chat;
         this.broadcasterProvider = broadcasterProvider;
+        this.pushDevices = pushDevices;
+        this.pushSender = pushSender;
         // Валидность (положительный Duration) проверяется в AbvProperties.validate().
         this.ringTimeout = properties.callRingTimeout();
         this.scheduler = Executors.newSingleThreadScheduledExecutor(task -> {
@@ -144,9 +152,10 @@ public class CallService implements CallCommands {
         broadcaster.sendToUsers(List.of(actor),
                 Events.newEvent(Events.CALL_CREATED, new Events.CallPayload(created.withPeer(callee))));
 
-        // Если у вызываемого нет активного соединения, звонить некуда: не
-        // заставляем инициатора ждать впустую, а сразу фиксируем «нет ответа».
-        if (!broadcaster.isOnline(in.calleeId())) {
+        // Для выключенного/уснувшего Android клиента оставляем звонок ringing,
+        // если у аккаунта зарегистрировано устройство и настроен FCM.
+        boolean canPush = pushSender.enabled() && pushDevices.hasDevices(in.calleeId());
+        if (!broadcaster.isOnline(in.calleeId()) && !canPush) {
             Call missed = repo.transition(new CallRepository.TransitionInput(
                     created.id(), CallStatus.RINGING, CallStatus.MISSED, null, REASON_TIMEOUT));
             repo.logEvent(created.id(), null, "missed", Map.of("reason", "callee offline"));
@@ -156,6 +165,15 @@ public class CallService implements CallCommands {
 
         broadcaster.sendToUsers(List.of(in.calleeId()),
                 Events.newEvent(Events.CALL_INCOMING, new Events.CallPayload(created.withPeer(caller))));
+        if (canPush) {
+            for (String token : pushDevices.tokens(in.calleeId())) {
+                try {
+                    pushSender.sendIncomingCall(token, created, caller.displayName());
+                } catch (RuntimeException e) {
+                    log.warn("incoming call push failed: call_id={} callee_id={}", created.id(), in.calleeId(), e);
+                }
+            }
+        }
         armRingTimer(created.id());
         return created;
     }
