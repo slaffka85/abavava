@@ -78,20 +78,58 @@ jobs:
             compose.prod.yaml .env.production.example \
             "$VPS_USER@$VPS_HOST:/opt/abavava/"
 
-      - name: Pull and restart production stack
+      - name: Write deployment image tags on VPS
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
-          GHCR_READ_USER: ${{ secrets.GHCR_READ_USER }}
-          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
           API_IMAGE: ghcr.io/${{ github.repository_owner }}/abavava-api:${{ github.sha }}
           WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/abavava-web:${{ github.sha }}
         run: |
           printf 'ABV_API_IMAGE=%s\nABV_WEB_IMAGE=%s\n' "$API_IMAGE" "$WEB_IMAGE" \
             | ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes "$VPS_USER@$VPS_HOST" \
               'umask 077; cat > /opt/abavava/.deploy.env'
+
+      - name: Log in to GHCR on VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          GHCR_READ_USER: ${{ secrets.GHCR_READ_USER }}
+          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        run: |
           printf '%s\n%s' "$GHCR_READ_USER" "$GHCR_READ_TOKEN" \
             | ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes "$VPS_USER@$VPS_HOST" \
               'IFS= read -r login_user; docker login ghcr.io --username "$login_user" --password-stdin'
+
+      - name: Validate production Compose configuration
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
           ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes "$VPS_USER@$VPS_HOST" \
-            'cd /opt/abavava && docker compose --env-file .env.production --env-file .deploy.env -f compose.prod.yaml pull && docker compose --env-file .env.production --env-file .deploy.env -f compose.prod.yaml up -d --remove-orphans && docker logout ghcr.io'
+            'cd /opt/abavava && docker compose --env-file .env.production --env-file .deploy.env -f compose.prod.yaml config --quiet'
+
+      - name: Pull production images
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/abavava && docker compose --env-file .env.production --env-file .deploy.env -f compose.prod.yaml pull'
+
+      - name: Start production stack
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/abavava && docker compose --env-file .env.production --env-file .deploy.env -f compose.prod.yaml up -d --remove-orphans'
+
+      - name: Log out from GHCR on VPS
+        if: always()
+        continue-on-error: true
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes "$VPS_USER@$VPS_HOST" \
+            'docker logout ghcr.io'
