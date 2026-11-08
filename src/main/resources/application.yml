@@ -1,5 +1,5 @@
 # =============================================================================
-# Конфигурация chat-abavava-java.
+# Конфигурация abavava.
 #
 # Это единственный источник значений по умолчанию: в Java-коде параметров не
 # зашито. Стандартные вещи Spring Boot (сервер, пул соединений, логирование)
@@ -18,7 +18,7 @@ spring:
   config:
     import: "optional:file:./.env[.properties]"
   application:
-    name: chat-abavava-java
+    name: abavava
   main:
     banner-mode: off
   autoconfigure:
@@ -35,8 +35,8 @@ spring:
   datasource:
     # URL PostgreSQL в JDBC-формате (формат postgres:// понимает только Go-трек).
     url: ${ABV_DATABASE_URL:jdbc:postgresql://localhost:5432/abavava?sslmode=disable}
-    username: ${ABV_DATABASE_USERNAME:abavava}
-    password: ${ABV_DATABASE_PASSWORD:abavava}
+    username: ${ABV_DATABASE_USERNAME:}
+    password: ${ABV_DATABASE_PASSWORD:}
     hikari:
       # Параметры пула повторяют database.DefaultOptions() из Go-реализации.
       pool-name: abv-pool

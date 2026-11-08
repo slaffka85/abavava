@@ -1,18 +1,18 @@
-name: chat-abavava-java
+name: abavava
 
 # PostgreSQL для Java-трека. Порт 5433, чтобы не конфликтовать с Go-треком
-# (chat-abavava/docker-compose.yml занимает 5432).
+# (Go-проект abavava-go может использовать свой отдельный стек).
 # Сам API запускается локально: build.ps1 run (или java -jar target/*.jar).
 services:
   postgres:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: abavava
-      POSTGRES_PASSWORD: abavava
+      POSTGRES_PASSWORD: ${ABV_DATABASE_PASSWORD:?Set ABV_DATABASE_PASSWORD in .env}
       POSTGRES_DB: abavava
       POSTGRES_INITDB_ARGS: "--data-checksums"
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - pgdata_java:/var/lib/postgresql/data
     healthcheck:

@@ -1,63 +1,76 @@
-# chat-abavava-java
+# abavava
 
-Второй бэкенд **chat-abavava** — параллельный трек: тот же продукт и тот же
-контракт, что у Go-реализации, но на **Java 26 + Spring Boot 4.1 + Spring
-Data JDBC**.
+Основной backend мессенджера и видеозвонков: Java 26, Spring Boot 4.1 и PostgreSQL 16.
+В этом репозитории также находятся React web-клиент (`web/`) и Android-приложение на Java (`android/`).
 
-Клиент (React SPA из `chat-abavava/web`) работает с любым из двух бэкендов:
-REST `/api/v1` и WebSocket-протокол v1 идентичны. Параллельная работа команд
-описана в [docs/TEAM.md](docs/TEAM.md), матрица паритета — в
-[docs/PARITY.md](docs/PARITY.md).
+REST API `/api/v1` и WebSocket-протокол v1 описаны в `docs/`. Альтернативная Go-реализация backend поддерживается отдельно в [`abavava-go`](https://github.com/slaffka85/abavava-go).
 
-**Стек:** Java 26 · Spring Boot 4.1.0 · Spring MVC · Spring Data JDBC /
-JdbcClient · Spring WebSocket · PostgreSQL 16 · Maven (проверка и тесты —
-офлайн на локальном кэше; упаковка jar — с однократной загрузкой артефактов
-плагинов из Maven Central).
-
-Паритет подтверждён: Go-смоук (`cmd/smoke`) против Java-API — **15/15**.
+**Стек:** Java 26 · Spring Boot 4.1 · Spring MVC · Spring Data JDBC/JdbcClient · Spring WebSocket · PostgreSQL 16 · React 19 · TypeScript · Vite · Android Gradle Plugin.
 
 ## Быстрый старт
 
 ```powershell
-# 1. Задайте секрет JWT в текущей PowerShell-сессии
-$env:ABV_JWT_SECRET = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+# 1. Создайте локальный файл конфигурации (он исключён из Git)
+Copy-Item .env.example .env
+$secret = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+$lines = (Get-Content .env) -replace '^ABV_JWT_SECRET=.*$', "ABV_JWT_SECRET=$secret"
+[IO.File]::WriteAllLines((Resolve-Path .env), $lines, [Text.UTF8Encoding]::new($false))
+Remove-Variable secret
+# Задайте ABV_DATABASE_USERNAME и ABV_DATABASE_PASSWORD в .env.
 
 # 2. PostgreSQL (своя БД, чтобы не мешать Go-треку)
 docker compose up -d postgres            # порт 5433
 
-# 2. Проверка компиляции и unit-тестов (офлайн)
+# 3. Проверка компиляции и unit-тестов (офлайн)
 powershell -ExecutionPolicy Bypass -File build.ps1 check
 
-# 3. Исполняемый jar (первая сборка скачивает зависимости плагинов
+# 4. Исполняемый jar (первая сборка скачивает зависимости плагинов
 #    с Maven Central; дальше работает кэш)
 powershell -ExecutionPolicy Bypass -File build.ps1 package
 
-# 4. Запуск API (:8082)
+# 5. Запуск API (:8082)
 powershell -ExecutionPolicy Bypass -File build.ps1 run
 
-# 5. Паритетный smoke-тест Go-трека против Java-API
+# 6. Паритетный smoke-тест Go-трека против Java-API
 powershell -ExecutionPolicy Bypass -File build.ps1 smoke
 ```
 
-`build.ps1 run` запускает `target\chat-abavava-java-0.1.0-SNAPSHOT.jar`, а если
+`build.ps1 run` запускает `target\abavava-0.1.0-SNAPSHOT.jar`, а если
 jar ещё не собран — стартует с classpath из локального Maven-кэша (без упаковки).
 
-Демо-данные: `ABV_SEED=true powershell -File build.ps1 run` создаст тех же
-трёх пользователей, что `cmd/seed` в Go-треке. Полноценная веб-часть — из
-Go-трека (`chat-abavava`, `:8081`); открыть её против Java-API:
+Демо-данные: `ABV_SEED=true powershell -File build.ps1 run` создаст тех же трёх пользователей, что Go-реализация.
 
-```bash
-cd chat-abavava/web
-VITE_API_BASE=http://127.0.0.1:8082 npm run dev
-```
+## Клиенты
 
-Проверка контракта Go-смоук-тестом (из соседнего проекта):
+### Web
 
 ```powershell
-cd ..\chat-abavava
-go run ./cmd/smoke -base http://127.0.0.1:8082
+cd web
+npm ci
+npm run dev
 ```
 
+Vite проксирует `/api` и WebSocket на Java API `localhost:8082`. Для подключения телефона в одной сети используйте режим `npm run local` и адрес компьютера, указанный в клиенте.
+
+### Android
+
+Откройте папку `android/` в Android Studio, дождитесь Gradle Sync и соберите APK через **Build → Build APK(s)** либо:
+
+```powershell
+cd android
+.\gradlew.bat assembleDebug
+```
+
+Для Android-сборки нужен JDK 17+ и Android SDK Platform 36. Backend отдельно собирается и запускается на Java 26. APK находится в `android/app/build/outputs/apk/debug/app-debug.apk`.
+
+Для FCM Android-сборке нужен `android/app/google-services.json`. Серверу нужен Firebase service-account JSON, заданный через `ABV_FCM_SERVICE_ACCOUNT_FILE`; этот приватный ключ храните вне репозитория.
+
+Проверить совместимость Java API Go-смоук-клиентом можно из соседнего проекта:
+
+```powershell
+cd ..\abavava-go
+go run ./cmd/smoke -base http://127.0.0.1:8082
+```
 ## Конфигурация
 
 Все значения по умолчанию заданы в
@@ -76,9 +89,9 @@ Spring Boot `spring.datasource.*` / `spring.datasource.hikari.*`, которые
 |---|---|---|
 | `ABV_ENV` | `development` | окружение; `production` включает строгие проверки |
 | `ABV_HTTP_ADDR` | `:8082` | адрес/порт прослушивания |
-| `ABV_DATABASE_URL` | `jdbc:postgresql://localhost:5433/abavava?sslmode=disable` | JDBC-URL PostgreSQL (формат `postgres://...` понимает только Go-трек) |
-| `ABV_DATABASE_USERNAME` | `abavava` | пользователь БД |
-| `ABV_DATABASE_PASSWORD` | `abavava` (только локальная БД Compose) | пароль БД; задайте отдельный секрет в production |
+| `ABV_DATABASE_URL` | нет, задайте в `.env` | JDBC-URL PostgreSQL (формат `postgres://...` понимает только Go-трек) |
+| `ABV_DATABASE_USERNAME` | нет, задайте в `.env` | пользователь БД |
+| `ABV_DATABASE_PASSWORD` | нет, задайте в `.env` | пароль БД; используйте отдельный секрет в production |
 | `ABV_JWT_SECRET` | нет, обязателен | Случайный HS256-ключ минимум 32 символа; задавайте через secret manager в production |
 | `ABV_ACCESS_TTL` | `15m` | время жизни access-токена |
 | `ABV_REFRESH_TTL` | `720h` | время жизни refresh-токена |
@@ -151,7 +164,7 @@ service-account JSON с доступом к Firebase Cloud Messaging. Секре
 нейтральное уведомление. Без настроенного FCM для звонков действует прежнее
 поведение, а уведомления о сообщениях не отправляются.
 
-Android клиент находится в соседнем проекте `chat-abavava`, где нужно подключить
+Android-клиент находится в папке `android/` этого репозитория. Для push используйте
 `google-services.json`, разрешение на уведомления и обработчик входящего FCM.
 
 - Хаб в памяти процесса (как в Go-треке): при нескольких инстансах нужны

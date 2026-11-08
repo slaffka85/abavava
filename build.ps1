@@ -113,7 +113,7 @@ switch ($Task) {
         try { docker compose up -d postgres } finally { Pop-Location }
     }
     'run' {
-        $jar = Join-Path $root 'target\chat-abavava-java-0.1.0-SNAPSHOT.jar'
+        $jar = Join-Path $root 'target\abavava-0.1.0-SNAPSHOT.jar'
         if (Test-Path $jar) {
             & java -jar $jar @args
         } else {
@@ -126,7 +126,7 @@ switch ($Task) {
         Write-Host "classpath written to $cpFile"
     }
     'smoke' {
-        $goProject = Join-Path (Split-Path $root -Parent) 'chat-abavava'
+        $goProject = Join-Path (Split-Path $root -Parent) 'abavava-go'
         if (-not (Test-Path $goProject)) { throw "Go project not found: $goProject" }
         $base = $env:ABV_SMOKE_BASE
         if (-not $base) { $base = 'http://127.0.0.1:8082' }

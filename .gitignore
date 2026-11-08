@@ -12,3 +12,23 @@ target/
 # Временные артефакты проверок
 .tmp-check/
 *.log
+
+# Web client
+web/node_modules/
+web/dist/
+web/.vite/
+web/.npm-cache/
+web/.pw-browsers/
+web/tools/media-check-artifacts/
+web/*.tsbuildinfo
+
+# Android client
+android/.gradle/
+android/local.properties
+android/build/
+android/app/build/
+
+# Local development TLS material
+dev-certs/
+.gigacode/
+.agent/

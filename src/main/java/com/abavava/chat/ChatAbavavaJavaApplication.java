@@ -5,7 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
 /**
- * Точка входа Java-трека chat-abavava.
+ * Точка входа backend приложения abavava.
  *
  * <p>Тот же продукт и тот же контракт, что у Go-бэкенда: REST /api/v1,
  * WebSocket-протокол v1 и та же схема PostgreSQL. Различаются только порт

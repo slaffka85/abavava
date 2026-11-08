@@ -1,0 +1,28 @@
+apply plugin: 'com.android.application'
+
+def hasFirebaseConfig = file('google-services.json').exists()
+if (hasFirebaseConfig) apply plugin: 'com.google.gms.google-services'
+
+android {
+    namespace 'ru.abavava.chat'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId 'ru.abavava.chat'
+        minSdk 24
+        targetSdk 35
+        versionCode 1
+        versionName '1.0.0'
+    }
+    sourceSets {
+        main.java.srcDirs += hasFirebaseConfig ? 'src/fcm/java' : 'src/noFcm/java'
+    }
+}
+
+dependencies {
+    if (hasFirebaseConfig) {
+        implementation platform('com.google.firebase:firebase-bom:35.1.0')
+        implementation 'com.google.firebase:firebase-messaging'
+        implementation 'androidx.core:core:1.17.0'
+    }
+}

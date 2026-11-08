@@ -1,0 +1,16 @@
+{
+  "id": "/",
+  "name": "Chat Abavava",
+  "short_name": "Abavava",
+  "description": "Личные и групповые чаты, голосовые и видеозвонки.",
+  "lang": "ru",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0d1016",
+  "theme_color": "#0f1115",
+  "icons": [
+    { "src": "/icons/app-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

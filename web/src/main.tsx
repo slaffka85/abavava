@@ -1,0 +1,22 @@
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import App from './App';
+import './styles/base.css';
+import './styles/app.css';
+
+const container = document.getElementById('root');
+if (!container) throw new Error('Не найден корневой элемент #root');
+
+createRoot(container).render(
+  <StrictMode>
+    <App />
+  </StrictMode>,
+);
+
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    void navigator.serviceWorker.register('/sw.js').catch((error: unknown) => {
+      console.warn('Не удалось включить офлайн-оболочку', error);
+    });
+  });
+}

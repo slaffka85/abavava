@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Trust the project-local CA only in debug APKs. Release builds keep system trust. -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="@raw/dev_ca" />
+        </trust-anchors>
+    </debug-overrides>
+</network-security-config>
